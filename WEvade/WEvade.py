@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-
+import matplotlib.pyplot as plt
 from utils import transform_image, project
 
 
@@ -60,6 +60,19 @@ def WEvade_W(original_image, Encoder, Decoder, criterion, args):
             break
 
     post_processed_watermarked_image = watermarked_image
+
+    from PIL import Image
+    import torchvision.transforms as transforms
+
+    # 转换为PIL格式
+    to_pil = transforms.ToPILImage()
+    img_pil = to_pil(0.5*original_image[0]+0.5)
+    img_pil.save("original.png")
+    img_pil = to_pil(0.5*watermarked_image_cloned[0]+0.5)
+    img_pil.save("watermark.png")
+    img_pil = to_pil(0.5*post_processed_watermarked_image[0]+0.5)
+    img_pil.save("post.png")
+
     bound = torch.norm(post_processed_watermarked_image - watermarked_image_cloned, float('inf'))
     bit_acc_groundtruth = 1 - np.sum(np.abs(rounded_decoded_watermark - groundtruth_watermark.cpu().numpy())) / (original_image.shape[0] * args.watermark_length)
 
