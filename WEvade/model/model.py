@@ -34,12 +34,12 @@ class Configuration:
 
 class Model:
     ### The model architecture.
-    def __init__(self, image_size, watermark_length, device):
+    def __init__(self, image_size, watermark_length,decoder_blocks_num, device):
         super(Model, self).__init__()
         configuration = Configuration(H=image_size, W=image_size,
                                             watermark_length=watermark_length,
                                             encoder_blocks=4, encoder_channels=64,
-                                            decoder_blocks=7, decoder_channels=64,
+                                            decoder_blocks=decoder_blocks_num, decoder_channels=64,
                                             use_discriminator=True,
                                             use_vgg=False,
                                             discriminator_blocks=3, discriminator_channels=64,

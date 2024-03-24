@@ -29,7 +29,7 @@ def main():
 
     new_run_parser.add_argument('--size', '-s', default=128, type=int,
                                 help='The size of the images (images are square so this is height and width).')
-    new_run_parser.add_argument('--message', '-m', default=30, type=int, help='The length in bits of the watermark.')
+    new_run_parser.add_argument('--message', '-m', default=48, type=int, help='The length in bits of the watermark.')
     new_run_parser.add_argument('--continue-from-folder', '-c', default='', type=str,
                                 help='The folder from where to continue a previous run. Leave blank if you are starting a new experiment.')
     # parser.add_argument('--tensorboard', dest='tensorboard', action='store_true',

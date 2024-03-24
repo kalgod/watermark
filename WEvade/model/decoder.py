@@ -11,12 +11,12 @@ class Decoder(nn.Module):
         super(Decoder, self).__init__()
         self.channels = config.decoder_channels
 
-        layers = [ConvBNRelu(3, self.channels)]
+        layers = [ConvBNRelu(3, self.channels,decoder_blocks=config.decoder_blocks)]
         for _ in range(config.decoder_blocks - 1):
-            layers.append(ConvBNRelu(self.channels, self.channels))
+            layers.append(ConvBNRelu(self.channels, self.channels,decoder_blocks=config.decoder_blocks))
 
         # layers.append(block_builder(self.channels, config.watermark_length))
-        layers.append(ConvBNRelu(self.channels, config.watermark_length))
+        layers.append(ConvBNRelu(self.channels, config.watermark_length,decoder_blocks=config.decoder_blocks))
 
         layers.append(nn.AdaptiveAvgPool2d(output_size=(1, 1)))
         self.layers = nn.Sequential(*layers)

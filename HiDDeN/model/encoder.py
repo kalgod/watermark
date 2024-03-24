@@ -37,6 +37,7 @@ class Encoder(nn.Module):
         expanded_message = expanded_message.expand(-1,-1, self.H, self.W)
         encoded_image = self.conv_layers(image)
         # concatenate expanded message and image
+        # print(expanded_message.shape, encoded_image.shape, image.shape)
         concat = torch.cat([expanded_message, encoded_image, image], dim=1)
         im_w = self.after_concat_layer(concat)
         im_w = self.final_layer(im_w)

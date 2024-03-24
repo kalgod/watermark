@@ -1,0 +1,5 @@
+Setting up [LPIPS] perceptual loss: trunk [vgg], v[0.1], spatial [off]
+Loading model from: /home/cjh/anaconda3/lib/python3.11/site-packages/lpips/weights/v0.1/vgg.pth
+Finished loading model
+Diffuse attack initialized with noise step 6 and use prompt 0
+method: wevade

@@ -4,7 +4,7 @@ import argparse
 import time
 from tqdm import tqdm
 
-from utils import get_data_loaders, transform_image, AverageMeter
+from utils import *
 from model.model import Model
 from noise_layers.diff_jpeg import DiffJPEG
 from noise_layers.gaussian import Gaussian
@@ -16,7 +16,7 @@ def post_process(original_image, Encoder, Decoder, method, args):
 
     # Embed the ground-truth watermark into the original image.
     original_image = original_image.cuda()
-    groundtruth_watermark = torch.from_numpy(np.load('./watermark/watermark_coco.npy')).cuda()
+    groundtruth_watermark = torch.from_numpy(np.load('./watermark/watermark_coco.npy')).cuda().repeat(original_image.shape[0],1)
     watermarked_image = Encoder(original_image, groundtruth_watermark)
     watermarked_image = transform_image(watermarked_image)
     watermarked_image_cloned = watermarked_image.clone()
@@ -33,6 +33,8 @@ def post_process(original_image, Encoder, Decoder, method, args):
     elif method == 'brightness':
         noise_layer = Brightness(args.a)
         watermarked_image = noise_layer(watermarked_image)
+    else:
+        pass
 
     post_processed_watermarked_image = watermarked_image
     decoded_watermark = Decoder(post_processed_watermarked_image)
@@ -51,16 +53,23 @@ def main():
         device = torch.device('cpu')
 
     parser = argparse.ArgumentParser(description='Existing post-processing methods Arguments.')
-    parser.add_argument('--checkpoint', default='./ckpt/coco.pth', type=str, help='Model checkpoint file.')
-    parser.add_argument('--dataset-folder', default='./dataset/coco/val', type=str, help='Dataset folder path.')
+    parser.add_argument('--checkpoint', default='./converted/clean.pth', type=str, help='Model checkpoint file.')
+    parser.add_argument('--dataset-folder', default='../coco/val', type=str, help='Dataset folder path.')
     parser.add_argument('--image-size', default=128, type=int, help='Size of the images (height and width).')
     parser.add_argument('--watermark-length', default=30, type=int, help='Number of bits in a watermark.')
+    parser.add_argument('--batch', default=10, type=int, help='batch size.')
     parser.add_argument('--tau', default=0.8, type=float, help='Detection threshold of the detector.')
+    parser.add_argument('--iteration', default=0, type=int, help='Max iteration in WEvdae-W.')
+    parser.add_argument('--epsilon', default=0.01, type=float, help='Epsilon used in WEvdae-W.')
+    parser.add_argument('--alpha', default=0.1, type=float, help='Learning rate used in WEvade-W.')
+    parser.add_argument('--rb', default=2, type=float, help='Upper bound of perturbation.')
+    parser.add_argument('--WEvade-type', default='WEvade-W-II', type=str, help='Using WEvade-W-I/II.')
+    parser.add_argument('--detector-type', default='double-tailed', type=str, help='Using double-tailed/single-tailed detctor.')
+
     parser.add_argument('--Q', default=50, type=int, help='Parameter Q for JPEGCompression.')
     parser.add_argument('--sigma1', default=0.1, type=float, help='Parameter \sigma for Gaussian noise.')
     parser.add_argument('--sigma2', default=0.5, type=float, help='Parameter \sigma for Gaussian blur.')
     parser.add_argument('--a', default=1.5, type=float, help='Parameter a for Brightness/Contrast.')
-    parser.add_argument('--detector-type', default='double-tailed', type=str, help='Using double-tailed/single-tailed detctor.')
 
     args = parser.parse_args()
 
@@ -71,7 +80,7 @@ def main():
     model.decoder.load_state_dict(checkpoint['dec-model'])
 
     # Load dataset.
-    data = get_data_loaders(args.image_size, args.dataset_folder)
+    data = get_data_loaders(args.image_size, args.dataset_folder,args.batch)
 
     # Existing post-processing methods.
     start_time = time.time()
@@ -83,7 +92,7 @@ def main():
     Evasion_rate = AverageMeter()
     Batch_time = AverageMeter()
 
-    method_list = ['jpeg', 'gaussian', 'gaussianblur', 'brightness']
+    method_list = ['none','jpeg', 'gaussian', 'gaussianblur', 'brightness']
     for method in method_list:
         print('method:', method)
 

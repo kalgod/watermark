@@ -4,15 +4,9 @@ import matplotlib.pyplot as plt
 from utils import transform_image, project
 
 
-def WEvade_W(original_image, Encoder, Decoder, criterion, args):
-
-    # Embed the ground-truth watermark into the original image.
-    original_image = original_image.cuda()
-    groundtruth_watermark = torch.from_numpy(np.load('./watermark/watermark_coco.npy')).cuda()
-    watermarked_image = Encoder(original_image, groundtruth_watermark)
-    watermarked_image = transform_image(watermarked_image)
-    watermarked_image_cloned = watermarked_image.clone()
-
+def WEvade_W(xr, Decoder, criterion, args):
+    watermarked_image=xr
+    watermarked_image_cloned = xr.clone()
     r = args.rb
     lr = args.alpha
     epsilon = args.epsilon
@@ -20,7 +14,7 @@ def WEvade_W(original_image, Encoder, Decoder, criterion, args):
 
     # WEvade_W_II target watermark selection.
     if args.WEvade_type == 'WEvade-W-II':
-        random_watermark = np.random.choice([0, 1], (original_image.shape[0], args.watermark_length))
+        random_watermark = np.random.choice([0, 1], (xr.shape[0], args.watermark_length))
         target_watermark = torch.from_numpy(random_watermark).cuda().float()
 
     # WEvade_W_I target watermark selection.
@@ -36,20 +30,22 @@ def WEvade_W(original_image, Encoder, Decoder, criterion, args):
 
         # Post-process the watermarked image.
         loss = criterion(decoded_watermark, target_watermark)
-        grads = torch.autograd.grad(loss, watermarked_image)
-        with torch.no_grad():
-            watermarked_image = watermarked_image - lr * grads[0]
-            watermarked_image = torch.clamp(watermarked_image, min_value, max_value)
+        
+        grads = torch.autograd.grad(loss, watermarked_image,create_graph=False)
+        # with torch.no_grad():
+        watermarked_image = watermarked_image - lr * grads[0]
+        watermarked_image = torch.clamp(watermarked_image, min_value, max_value)
 
         # Projection.
         perturbation_norm = torch.norm(watermarked_image - watermarked_image_cloned, float('inf'))
+        # print(i,loss,perturbation_norm)
         if perturbation_norm.cpu().detach().numpy() >= r:
             c = r / perturbation_norm
             watermarked_image = project(watermarked_image, watermarked_image_cloned, c)
 
         decoded_watermark = Decoder(watermarked_image)
         rounded_decoded_watermark = decoded_watermark.detach().cpu().numpy().round().clip(0, 1)
-        bit_acc_target = 1 - np.sum(np.abs(rounded_decoded_watermark - target_watermark.cpu().numpy())) / (original_image.shape[0] * args.watermark_length)
+        bit_acc_target = 1 - np.sum(np.abs(rounded_decoded_watermark - target_watermark.cpu().numpy())) / (xr.shape[0] * args.watermark_length)
 
         # Early Stopping.
         if perturbation_norm.cpu().detach().numpy() >= r:
@@ -59,43 +55,24 @@ def WEvade_W(original_image, Encoder, Decoder, criterion, args):
             success = True
             break
 
-    post_processed_watermarked_image = watermarked_image
+    return watermarked_image
 
-    from PIL import Image
-    import torchvision.transforms as transforms
+def WEvade_W_binary_search_r(xr, Decoder, criterion, args):
 
-    # 转换为PIL格式
-    to_pil = transforms.ToPILImage()
-    img_pil = to_pil(0.5*original_image[0]+0.5)
-    img_pil.save("original.png")
-    img_pil = to_pil(0.5*watermarked_image_cloned[0]+0.5)
-    img_pil.save("watermark.png")
-    img_pil = to_pil(0.5*post_processed_watermarked_image[0]+0.5)
-    img_pil.save("post.png")
-
-    bound = torch.norm(post_processed_watermarked_image - watermarked_image_cloned, float('inf'))
-    bit_acc_groundtruth = 1 - np.sum(np.abs(rounded_decoded_watermark - groundtruth_watermark.cpu().numpy())) / (original_image.shape[0] * args.watermark_length)
-
-    return bit_acc_groundtruth, bound.item(), success
-
-
-def WEvade_W_binary_search_r(original_image, Encoder, Decoder, criterion, args):
-
-    original_image = original_image.cuda()
-    groundtruth_watermark = torch.from_numpy(np.load('./watermark/watermark_coco.npy')).cuda()
-    watermarked_image = Encoder(original_image, groundtruth_watermark)
-    watermarked_image = transform_image(watermarked_image)
-    watermarked_image_cloned = watermarked_image.clone()
+    watermarked_image=xr
+    watermarked_image_cloned = xr.clone()
 
     rb = args.rb
     ra = 0
     lr = args.alpha
     epsilon = args.epsilon
 
+    # WEvade_W_II target watermark selection.
     if args.WEvade_type == 'WEvade-W-II':
-        random_watermark = np.random.choice([0, 1], (original_image.shape[0], args.watermark_length))
+        random_watermark = np.random.choice([0, 1], (xr.shape[0], args.watermark_length))
         target_watermark = torch.from_numpy(random_watermark).cuda().float()
 
+    # WEvade_W_I target watermark selection.
     elif args.WEvade_type == 'WEvade-W-I':
         chosen_watermark = Decoder(watermarked_image).detach().cpu().numpy().round().clip(0, 1)
         chosen_watermark = 1 - chosen_watermark
@@ -138,11 +115,6 @@ def WEvade_W_binary_search_r(original_image, Encoder, Decoder, criterion, args):
         else:
             ra = r
 
-    post_processed_watermark_image = watermarked_image
-    bound = torch.norm(post_processed_watermark_image - watermarked_image_cloned, float('inf'))
-    bit_acc_groundtruth = 1 - np.sum(np.abs(rounded_decoded_watermark - groundtruth_watermark.cpu().numpy())) / (original_image.shape[0] * args.watermark_length)
-
-    return bit_acc_groundtruth, bound.item(), success
-
+    return watermarked_image
 
 

@@ -1,7 +1,37 @@
 import torch
 from torchvision import datasets, transforms
+import torchvision.utils
+import os
 from PIL import Image
+from augly.image import functional as aug_functional
 
+def jpeg_compress(x, quality_factor):
+    """ Apply jpeg compression to image
+    Args:
+        x: Tensor image
+        quality_factor: quality factor
+    """
+    to_pil = transforms.ToPILImage()
+    to_tensor = transforms.ToTensor()
+    img_aug = torch.zeros_like(x, device=x.device)
+    x = (x+1)/2
+    for ii,img in enumerate(x):
+        pil_img = to_pil(img)
+        img_aug[ii] = to_tensor(aug_functional.encoding_quality(pil_img, quality=quality_factor))
+    return img_aug*2-1
+
+def save_images(original_images, watermarked_images,attack_images, folder):
+    images = original_images[:original_images.shape[0], :, :, :].cpu()
+    watermarked_images = watermarked_images[:watermarked_images.shape[0], :, :, :].cpu()
+    attack_images = attack_images[:attack_images.shape[0], :, :, :].cpu()
+    
+    # scale values to range [0, 1] from original range of [-1, 1]
+    images = (images + 1) / 2
+    watermarked_images = (watermarked_images + 1) / 2
+    attack_images = (attack_images + 1) / 2
+
+    stacked_images = torch.cat([images, watermarked_images,attack_images], dim=0)
+    torchvision.utils.save_image(stacked_images, folder,nrow=int(original_images.shape[0]))
 
 def save_image_from_tensor(tensor, file_path):
     # Save a single image from torch tensor
@@ -12,7 +42,7 @@ def save_image_from_tensor(tensor, file_path):
     im.save(file_path)
 
 
-def get_data_loaders(image_size, dataset_folder):
+def get_data_loaders(image_size, dataset_folder,batch):
     # Get torch data loaders. The data loaders take a crop of the image, transform it into tensor, and normalize it.
     data_transforms = transforms.Compose([
             transforms.CenterCrop((image_size, image_size)),
@@ -21,7 +51,7 @@ def get_data_loaders(image_size, dataset_folder):
     ])
 
     dataset_images = datasets.ImageFolder(dataset_folder, data_transforms)
-    dataset_loader = torch.utils.data.DataLoader(dataset_images, batch_size=1, shuffle=False, num_workers=4)
+    dataset_loader = torch.utils.data.DataLoader(dataset_images, batch_size=batch, shuffle=False, num_workers=4)
 
     return dataset_loader
 

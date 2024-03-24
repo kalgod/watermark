@@ -54,7 +54,7 @@ def save_images(original_images, watermarked_images, epoch, folder, resize_to=No
 
     stacked_images = torch.cat([images, watermarked_images], dim=0)
     filename = os.path.join(folder, 'epoch-{}.png'.format(epoch))
-    torchvision.utils.save_image(stacked_images, filename, original_images.shape[0], normalize=False)
+    torchvision.utils.save_image(stacked_images, filename)
 
 
 def sorted_nicely(l):
@@ -80,6 +80,8 @@ def save_checkpoint(model: Hidden, experiment_name: str, epoch: int, checkpoint_
     logging.info('Saving checkpoint to {}'.format(checkpoint_filename))
     checkpoint = {
         'enc-dec-model': model.encoder_decoder.state_dict(),
+        'enc-model': model.encoder_decoder.encoder.state_dict(),
+        'dec-model': model.encoder_decoder.decoder.state_dict(),
         'enc-dec-optim': model.optimizer_enc_dec.state_dict(),
         'discrim-model': model.discriminator.state_dict(),
         'discrim-optim': model.optimizer_discrim.state_dict(),
