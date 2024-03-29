@@ -175,43 +175,7 @@ class DiffWMAttacker(WMAttacker):
         print(f'Diffuse attack initialized with noise step {self.noise_step} and use prompt {len(self.captions)}')
 
     def attack(self, image, return_latents=False, return_dist=False,eval=False):
-        if (eval==True):
-            with torch.no_grad():
-                generator = torch.Generator(self.device).manual_seed(1024)
-                latents_buf = []
-                prompts_buf = []
-                outs_buf = []
-                timestep = torch.tensor([self.noise_step], dtype=torch.long, device=self.device)
-                ret_latents = []
-
-                def batched_attack(latents_buf, prompts_buf, outs_buf):
-                    latents = torch.cat(latents_buf, dim=0)
-                    images = self.pipe(prompts_buf,
-                                    head_start_latents=latents,
-                                    head_start_step=50 - max(self.noise_step // 20, 1),
-                                    guidance_scale=7.5,
-                                    generator=generator, )
-                    # print(images,images.shape)
-                    return images
-
-                prompts = [""] * len(image)
-
-                for img_path, prompt in tqdm(zip(image, prompts)):
-                    img=img_path.unsqueeze(0)
-                    # print(img.shape,img,self.pipe)
-                    latents = self.pipe.vae.encode(img).latent_dist
-                    latents = latents.sample(generator) * self.pipe.vae.config.scaling_factor
-                    noise = torch.randn([1, 4, img.shape[-2] // 8, img.shape[-1] // 8], device=self.device)
-                    if return_dist:
-                        return self.pipe.scheduler.add_noise(latents, noise, timestep, return_dist=True)
-                    latents = self.pipe.scheduler.add_noise(latents, noise, timestep)
-                    latents_buf.append(latents)
-                    # outs_buf.append(out_path)
-                    prompts_buf.append(prompt)
-
-                image_attack=batched_attack(latents_buf, prompts_buf, outs_buf)
-                return image_attack
-        else:
+        def execute():
             generator = torch.Generator(self.device).manual_seed(1024)
             latents_buf = []
             prompts_buf = []
@@ -223,7 +187,10 @@ class DiffWMAttacker(WMAttacker):
                 latents = torch.cat(latents_buf, dim=0)
                 images = self.pipe(prompts_buf,
                                 head_start_latents=latents,
+                                # head_start_step=49,
                                 head_start_step=50 - max(self.noise_step // 20, 1),
+                                # latents=latents,
+                                # num_inference_steps=2,
                                 guidance_scale=7.5,
                                 generator=generator, )
                 # print(images,images.shape)
@@ -236,6 +203,8 @@ class DiffWMAttacker(WMAttacker):
                 # print(img.shape,img,self.pipe)
                 latents = self.pipe.vae.encode(img).latent_dist
                 latents = latents.sample(generator) * self.pipe.vae.config.scaling_factor
+                # tmp=self.pipe.decode_latents(latents)
+                # print(torch.mean(abs(tmp-img)))
                 noise = torch.randn([1, 4, img.shape[-2] // 8, img.shape[-1] // 8], device=self.device)
                 if return_dist:
                     return self.pipe.scheduler.add_noise(latents, noise, timestep, return_dist=True)
@@ -247,3 +216,9 @@ class DiffWMAttacker(WMAttacker):
             image_attack=batched_attack(latents_buf, prompts_buf, outs_buf)
             return image_attack
 
+
+        if (eval==True):
+            with torch.no_grad():
+                return execute()
+        else:
+            return execute()

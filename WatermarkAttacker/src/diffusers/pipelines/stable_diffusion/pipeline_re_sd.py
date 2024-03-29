@@ -161,7 +161,6 @@ class ReSDPipeline(StableDiffusionPipeline):
         num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
-                #print((i, t))
                 if not head_start_step or i >= head_start_step: # if there is no head start or we reached the hs step                
                     # expand the latents if we are doing classifier free guidance
                     #print(latents.shape)

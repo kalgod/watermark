@@ -107,7 +107,7 @@ def JPEG_initailization(watermarked_images, labels, detector, quality_ls, natura
                 adv_images[k:k+1] = jpeg_image
                 flags[k]=1
         del jpeg_module
-    print("Finish JPEG Initialization.")
+    # print("Finish JPEG Initialization.")
     
     if verbose:
         print("Flags:", flags)

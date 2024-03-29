@@ -4,6 +4,54 @@ import torchvision.utils
 import os
 from PIL import Image
 from augly.image import functional as aug_functional
+import numpy as np
+from pytorch_fid.fid_score import InceptionV3, calculate_frechet_distance, compute_statistics_of_path
+from skimage.metrics import peak_signal_noise_ratio
+from skimage.metrics import structural_similarity
+import lpips
+
+if torch.cuda.is_available():
+    device = torch.device('cuda')
+else:
+    device = torch.device('cpu')
+
+loss_fn = lpips.LPIPS(net='vgg')  # 或者 'alex' 也是可选的
+loss_fn = loss_fn.to(device)
+
+def cal_fid(img1,img2):
+    # 初始化预训练的Inception模型
+    block_idx = InceptionV3.BLOCK_INDEX_BY_DIM[2048]
+    model = InceptionV3([block_idx])
+    mu_real, sigma_real = compute_statistics_of_path(img1, model, 50)  # 这里使用50张真实图像
+    mu_fake, sigma_fake = compute_statistics_of_path(img2, model, 50)  # 这里使用50张生成图像
+    # 计算FID
+    fid_score = calculate_frechet_distance(mu_real, sigma_real, mu_fake, sigma_fake)
+    return fid_score
+
+def cal_lpips(img1,img2):
+    # 初始化lpips模型
+    img1=torch.from_numpy(img1).float()
+    img2=torch.from_numpy(img2).float()
+    img1 = img1.to(device)
+    img2 = img2.to(device)
+    lpips_score=loss_fn(img1,img2).detach().cpu().numpy()
+    lpips_score=np.mean(lpips_score)
+    # print(lpips_score.shape)
+    return lpips_score
+
+def cal_psnr(img1,img2):
+    x=np.asarray(img1)
+    y=np.asarray(img2)
+    psnr=peak_signal_noise_ratio(x,y)
+    return psnr
+
+def cal_ssim(img1,img2):
+    x=np.asarray(img1)
+    x=np.tile(x, (2, 1, 1, 1))
+    y=np.asarray(img2)
+    y=np.tile(y, (2, 1, 1, 1))
+    ssim=structural_similarity(x,y,channel_axis=1,data_range=2.0)
+    return ssim
 
 def jpeg_compress(x, quality_factor):
     """ Apply jpeg compression to image
