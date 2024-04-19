@@ -716,7 +716,7 @@ def main():
 
     parser.add_argument('--epsilon', default=0.01, type=float, help='Epsilon used in WEvdae-W.')
     parser.add_argument('--iteration', default=100, type=int, help='Max iteration in WEvdae-W.')
-    parser.add_argument('--alpha', default=2, type=float, help='Learning rate used in WEvade-W.')
+    parser.add_argument('--alpha', default=1, type=float, help='Learning rate used in WEvade-W.')
     parser.add_argument('--rb', default=2, type=float, help='Upper bound of perturbation.')
     parser.add_argument('--WEvade-type', default='WEvade-W-II', type=str, help='Using WEvade-W-I/II.')
     parser.add_argument('--detector-type', default='single-tailed', type=str, help='Using double-tailed/single-tailed detctor.')
