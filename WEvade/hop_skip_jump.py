@@ -365,6 +365,8 @@ class HopSkipJump(EvasionAttack):
                 if mask is not None:
                     random_img = random_img * mask + x * (1 - mask)
 
+                # print(x[0][0][:5],random_img[0][0][:5],np.mean(abs(x-random_img)))
+
                 random_class = np.argmax(
                     self.estimator.predict(np.array([random_img]), batch_size=self.batch_size),
                     axis=1,
@@ -385,7 +387,7 @@ class HopSkipJump(EvasionAttack):
                     initial_sample = (random_img, y_p)
                     init_num_queries += num_queries_bs
 
-                    logger.info("Found initial adversarial image for untargeted attack.")
+                    logger.warning("Found initial adversarial image for untargeted attack.")
                     break
             else:
                 logger.warning("Failed to draw a random image that is adversarial, attack failed.")

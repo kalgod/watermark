@@ -1,0 +1,7 @@
+*__pycache__
+coco
+DB
+WEvade/result/*
+WEvade/finetuned/*
+WEvade/pre_opt/*
+WEvade/CIN/pth/cinNet&nsmNet.pth

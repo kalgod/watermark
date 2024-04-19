@@ -29,6 +29,7 @@ class InvisibleWatermarker(Watermarker):
         img = cv2.imread(img_path)
         self.encoder.set_watermark(self.wm_type, self.wm_text.encode('utf-8'))
         out = self.encoder.encode(img, self.method)
+        # print(img.shape, out.shape,img,out)
         cv2.imwrite(output_path, out)
 
     def decode(self, img_path):

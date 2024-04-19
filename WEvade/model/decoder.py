@@ -29,5 +29,4 @@ class Decoder(nn.Module):
         # tensor of shape b x c. If we just call squeeze_() it will also squeeze the batch dimension when b=1.
         decoded_watermark.squeeze_(3).squeeze_(2)
         decoded_watermark = self.linear(decoded_watermark)
-
         return decoded_watermark

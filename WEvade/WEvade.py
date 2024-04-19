@@ -23,6 +23,8 @@ def WEvade_W(xr, Decoder, criterion, args):
         chosen_watermark = 1 - chosen_watermark
         target_watermark = torch.from_numpy(chosen_watermark).cuda()
 
+    gradient=[]
+
     for i in range(args.iteration):
         watermarked_image = watermarked_image.requires_grad_(True)
         min_value, max_value = torch.min(watermarked_image), torch.max(watermarked_image)
@@ -30,6 +32,7 @@ def WEvade_W(xr, Decoder, criterion, args):
 
         # Post-process the watermarked image.
         loss = criterion(decoded_watermark, target_watermark)
+        # loss = criterion(torch.sigmoid(decoded_watermark), target_watermark)
         
         grads = torch.autograd.grad(loss, watermarked_image,create_graph=False)
         # with torch.no_grad():
@@ -38,7 +41,7 @@ def WEvade_W(xr, Decoder, criterion, args):
 
         # Projection.
         perturbation_norm = torch.norm(watermarked_image - watermarked_image_cloned, float('inf'))
-        # print(i,loss,perturbation_norm)
+        
         if perturbation_norm.cpu().detach().numpy() >= r:
             c = r / perturbation_norm
             watermarked_image = project(watermarked_image, watermarked_image_cloned, c)
@@ -46,6 +49,10 @@ def WEvade_W(xr, Decoder, criterion, args):
         decoded_watermark = Decoder(watermarked_image)
         rounded_decoded_watermark = decoded_watermark.detach().cpu().numpy().round().clip(0, 1)
         bit_acc_target = 1 - np.sum(np.abs(rounded_decoded_watermark - target_watermark.cpu().numpy())) / (xr.shape[0] * args.watermark_length)
+        real_watermark = Decoder(xr).detach().cpu().numpy().round().clip(0, 1)
+        bit_acc_real = 1 - np.sum(np.abs(rounded_decoded_watermark - real_watermark)) / (xr.shape[0] * args.watermark_length)
+        # print(i,loss.item(),perturbation_norm.item(),bit_acc_target,bit_acc_real)
+        gradient.append([bit_acc_real,bit_acc_target])
 
         # Early Stopping.
         if perturbation_norm.cpu().detach().numpy() >= r:

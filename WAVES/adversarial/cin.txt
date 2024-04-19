@@ -1,0 +1,9 @@
+loading dataset ...
+number of watermarked images --> 10000
+number of original images --> 10000
+train/test split: (16000, 4000)
+Epoch 1/300, Training Loss: 0.6964, Train Accuracy: 49.86%
+Validation Loss: 0.6932, Validation Accuracy: 50.85%
+Epoch 2/300, Training Loss: 0.6940, Train Accuracy: 50.01%
+Validation Loss: 0.6958, Validation Accuracy: 49.23%
+Epoch 3/300, Training Loss: 0.6943, Train Accuracy: 50.42%

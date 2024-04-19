@@ -1,3 +1,7 @@
 *__pycache__
 watermarked_images/*
-results/*
+result/*
+finetuned/*
+pre_opt/*
+CIN/pth/cinNet&nsmNet.pth
+MBRS/results/MBRS_256_m256/*

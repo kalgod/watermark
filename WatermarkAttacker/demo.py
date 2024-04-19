@@ -35,9 +35,9 @@ pipe.to(device)
 print('Finished loading model')
 
 attackers = {
-    'diff_attacker_60': DiffWMAttacker(pipe, batch_size=5, noise_step=60, captions={}),
-    'cheng2020-anchor_3': VAEWMAttacker('cheng2020-anchor', quality=3, metric='mse', device=device),
-    'bmshj2018-factorized_3': VAEWMAttacker('bmshj2018-factorized', quality=3, metric='mse', device=device),
+    # 'diff_attacker_60': DiffWMAttacker(pipe, batch_size=5, noise_step=60, captions={}),
+    # 'cheng2020-anchor_3': VAEWMAttacker('cheng2020-anchor', quality=3, metric='mse', device=device),
+    # 'bmshj2018-factorized_3': VAEWMAttacker('bmshj2018-factorized', quality=3, metric='mse', device=device),
     'jpeg_attacker_50': JPEGAttacker(quality=50),
 }
 
@@ -153,7 +153,7 @@ for wmarker_name, wmarker in wmarkers.items():
         detect_att_results[wmarker_name][attacker_name]['bit_acc'] = np.array(bit_accs).mean()
         detect_att_results[wmarker_name][attacker_name]['wm_success'] = len(wm_successes) / len(ori_img_paths)
 
-
+print(detect_wm_results, detect_att_results)
 from IPython.display import Image
 img_id = '000000000711.png'
 Image(filename='examples/ori_imgs/'+img_id) # original image

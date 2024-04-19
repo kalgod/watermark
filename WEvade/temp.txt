@@ -1,0 +1,20 @@
+Setting up [LPIPS] perceptual loss: trunk [vgg], v[0.1], spatial [off]
+Loading model from: /home/cjh/anaconda3/lib/python3.11/site-packages/lpips/weights/v0.1/vgg.pth
+Setting up [LPIPS] perceptual loss: trunk [vgg], v[0.1], spatial [off]
+Loading model from: /home/cjh/anaconda3/lib/python3.11/site-packages/lpips/weights/v0.1/vgg.pth
+Finished loading model
+Finished loading model
+Diffuse attack initialized with noise step 0 and use prompt 0
+Diffuse attack initialized with noise step 0 and use prompt 0
+Model loaded! ../WAVES/adversarial/models/stega.pth
+cur idx:  0
+For watermark, PSNR: 29.132243901301592 SSIM: 0.96351665 LPIPS: 0.15703838 ACC: 0.953125
+For attacks:  surrogate  PSNR: 23.89027635141514 SSIM: 0.8466365 LPIPS: 0.4597333 ACC: 0.609375
+For attacks:  wevade  PSNR: 28.963687997885188 SSIM: 0.96070194 LPIPS: 0.17535299 ACC: 0.5390625
+For attacks:  regen-diff  PSNR: 22.101304130698946 SSIM: 0.843787 LPIPS: 0.2663986 ACC: 0.65625
+For attacks:  regen-diff-1  PSNR: 22.082313614078984 SSIM: 0.8397487 LPIPS: 0.26513752 ACC: 0.6640625
+For attacks:  combined  PSNR: 20.73606565326181 SSIM: 0.75828856 LPIPS: 0.33613834 ACC: 0.78125
+For attacks:  jpeg  PSNR: 26.492582844178585 SSIM: 0.93877435 LPIPS: 0.24066953 ACC: 0.890625
+For attacks:  gaussian  PSNR: 24.619746234545367 SSIM: 0.90172094 LPIPS: 0.30627882 ACC: 0.9140625
+For attacks:  gaussianblur  PSNR: 27.23061995558803 SSIM: 0.94986457 LPIPS: 0.2045111 ACC: 0.953125
+For attacks:  brightness  PSNR: 21.716984280552083 SSIM: 0.7950425 LPIPS: 0.2240056 ACC: 0.84375

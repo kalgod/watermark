@@ -4,19 +4,33 @@ import numpy as np
 import argparse
 import time
 from tqdm import tqdm
-from diffusers import ReSDPipeline,StableDiffusionPipeline
+from diffusers import ReSDPipeline,StableDiffusionPipeline,DPMSolverMultistepScheduler
 from main_WEvade_B_Q import get_watermark_detector,Class_Layer,WEvade_B_Q,JPEG_initailization
 from art.estimators.classification import PyTorchClassifier
 import lpips
+from torchvision.models import resnet18
 
 from utils import *
 from model.model import Model
+from model.riva import InvisibleWatermarker
+from model.tree_ring import run_tree_ring
+from model.stega_stamp import run_stega_stamp
+
+import sys
+sys.path.append("./pimog")
+from pimog.model import Encoder_Decoder
+sys.path.append("./CIN/codes")
+# print(sys.path)
+from utils_cin.yml import parse_yml, dict_to_nonedict, set_random_seed,dict2str
+
+from TreeRingWatermark.inverse_stable_diffusion import InversableStableDiffusionPipeline
 from WEvade import WEvade_W, WEvade_W_binary_search_r
 from noise_layers.diff_jpeg import DiffJPEG
 from noise_layers.gaussian import Gaussian
 from noise_layers.gaussian_blur import GaussianBlur
 from noise_layers.brightness import Brightness
 from noise_layers.wmattacker import *
+from noise_layers.surrogate import *
 
 # np.random.seed(0)
 
@@ -40,18 +54,45 @@ pipe1.set_progress_bar_config(disable=True)
 pipe1.to(device)
 print('Finished loading model')
 
+# scheduler = DPMSolverMultistepScheduler.from_pretrained("stabilityai/stable-diffusion-2-1-base", subfolder='scheduler')
+# pipe3 = InversableStableDiffusionPipeline.from_pretrained(
+#     "stabilityai/stable-diffusion-2-1-base",
+#     scheduler=scheduler,
+#     )
+# pipe3 = pipe3.to(device)
+
 attackers = {
     'diff_1': DiffWMAttacker(pipe, batch_size=5, noise_step=0, captions={}),
     'diff_2': DiffWMAttacker(pipe1, batch_size=5, noise_step=0, captions={}),
-    'cheng2020-anchor_3': VAEWMAttacker('cheng2020-anchor', quality=3, metric='mse', device=device),
-    'bmshj2018-factorized_3': VAEWMAttacker('bmshj2018-factorized', quality=3, metric='mse', device=device),
-    'jpeg_attacker_50': JPEGAttacker(quality=50),
+    # 'cheng2020-anchor_3': VAEWMAttacker('cheng2020-anchor', quality=3, metric='mse', device=device),
+    # 'bmshj2018-factorized_3': VAEWMAttacker('bmshj2018-factorized', quality=3, metric='mse', device=device),
+    # 'jpeg_attacker_50': JPEGAttacker(quality=50),
 }
+    
+defenders = {
+    'DwtDctSvd': InvisibleWatermarker("test","dwtDctSvd"),
+    'RivaGAN': InvisibleWatermarker("test","rivaGan"),
+    # 'tree':
+}
+
+class ResNetBinaryClassifier(nn.Module):
+    def __init__(self):
+        super(ResNetBinaryClassifier, self).__init__()
+        import torchvision.models as models
+        self.resnet = models.resnet18(pretrained=True)
+        num_features = self.resnet.fc.in_features
+        self.resnet.fc = nn.Linear(num_features, 1)
+
+    def forward(self, x):
+        # return self.resnet(x)
+        return torch.sigmoid(self.resnet(x))
+    
+black_model=ResNetBinaryClassifier()
 
 def black_attack(x0,xr,real_watermark, Decoder, method,criterion, args):
     watermarked_images=xr.detach().cpu().numpy()
     quality_ls = [99,90,70,50,30,10,5,3,2,1]
-    th_ls = [args.tau]
+    th_ls = [args.tau-0.05]
     labels = np.ones((len(watermarked_images)))
     verbose=False
     # th_ls = [0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95]
@@ -174,6 +215,10 @@ def apply_attack(x0,xr,real_watermark, Decoder, method,criterion, args,eval=True
         image = noise_layer(image)
     elif method == 'black':
         image=black_attack(x0,xr,real_watermark, Decoder, method,criterion, args)
+    elif method == 'surrogate':
+        global black_model
+        image=(image+1)/2
+        image=adv_surrogate_model_attack(x0,image,black_model,15)
     else:
         pass
 
@@ -252,7 +297,7 @@ def pre_optimize(model,x0,real_watermark,criterion,args):
         xr = transform_image(xr)
         xr=xr.detach()
         print(i,loss.item(),acc_clean,psnr_clean,acc_adv1,acc_adv2,acc_adv3,acc_adv4,acc_adv5)
-        if (psnr_clean>=33.5): break
+        if (psnr_clean>=34.5): break
     model.encoder.eval()
     model.decoder.eval()
     return xr
@@ -303,7 +348,7 @@ def direct_optimize(model,x0,real_watermark,criterion,args,xr_pre):
         # if (acc_adv2<=0.72): loss_a+=weight2*loss_a2;cnt+=weight2
 
         loss_a3,acc_adv3,psnr_adv3=cal_xra(x0,xr,"regen-diff");weight3=0.1
-        if (acc_adv3<=args.tau): loss_a+=weight3*loss_a3;cnt+=weight3
+        if (acc_adv3<=0.85): loss_a+=weight3*loss_a3;cnt+=weight3
 
         loss_a4,acc_adv4,psnr_adv4=cal_xra(x0,xr,"gaussian");weight4=0.1
         if (acc_adv4<=0.99): loss_a+=weight4*loss_a4;cnt+=weight4
@@ -317,21 +362,21 @@ def direct_optimize(model,x0,real_watermark,criterion,args,xr_pre):
         loss_w = criterion(decoded_watermark_clean, real_watermark)
         loss_i1=0.1*torch.mean(loss_fn(x0,xr))+0.9*criterion(x0,xr)
         loss_i2=criterion(xr_pre,xr)
-        loss_i=(1*loss_i1+0*loss_i2)/2
+        loss_i=(1*loss_i1+1*loss_i2)/2
 
         loss=loss_a+0.1*loss_w+args.lamda_i*loss_i
 
         grads = torch.autograd.grad(loss, xr)
         xr = xr - args.lr_image * torch.sign(grads[0])
         delta=xr - x0
-        delta=torch.clamp(delta,-2*args.delta_finetune,2*args.delta_finetune)
+        delta=torch.clamp(delta,-args.delta_finetune,args.delta_finetune)
         # print(i,loss,bound)
         xr=x0+delta
         xr = transform_image(xr)
         xr=xr.detach()
         if (i%10==0): print(i,loss.item(),acc_clean,psnr_clean,acc_adv1,acc_adv2,acc_adv3,acc_adv4,acc_adv5)
-        if (acc_adv1>0.8 and acc_adv3>0.75): break
-        if (psnr_clean<=29.5): break
+        if (acc_adv1>0.8 and acc_adv3>0.8 and acc_adv4>0.9 and acc_adv5>0.9): break
+        if (psnr_clean<=30.0): break
     model.encoder.eval()
     model.decoder.eval()
     return xr
@@ -503,13 +548,11 @@ def eval(model,data,args):
     Clean_ssim=AverageMeter()
     Clean_lpips=AverageMeter()
 
-    # Bit_acc = AverageMeter()
-    # Perturbation = AverageMeter()
-    # Evasion_rate = AverageMeter()
-    # Batch_time = AverageMeter()
+    method_list = ['surrogate','wevade','regen-diff','regen-diff-1','combined','jpeg', 'gaussian', 'gaussianblur', 'brightness','black']
+    if (args.defense in ["DwtDctSvd","RivaGAN"]):
+        method_list = ['surrogate','regen-diff','regen-diff-1','combined','jpeg', 'gaussian', 'gaussianblur', 'brightness','black']
 
-    method_list = ['wevade','regen-diff','regen-diff-1','combined','jpeg', 'gaussian', 'gaussianblur', 'brightness','black']
-    # method_list = ['black']
+    # method_list = ['combined','jpeg', 'gaussian', 'gaussianblur', 'brightness']
     Bit_acc={}
     Perturbation={}
     Evasion_rate={}
@@ -521,38 +564,56 @@ def eval(model,data,args):
         Evasion_rate[method]=AverageMeter()
         Batch_time[method]=AverageMeter()
 
-    opt_xr=[]
+    opt_xr=torch.zeros((100,3,args.image_size,args.image_size))
     dataset=args.dataset_folder.split("/")[-1]
+
     xr_pre_all=np.load("./pre_opt/opt_xr_"+str(dataset)+"_"+str(args.lamda_i)+".npy")
-    # xr_pre_all=np.load("./result/opt_xr_pre.npy")
+    # xr_pre_all=np.load("./pre_opt/opt_xr_"+str(dataset)+"_pre_128.npy")
     xr_pre_all=torch.from_numpy(xr_pre_all).float().to(device)
-    tmp=torch.rand((100,3,128,128)).float().to(device)
-    for i in range (xr_pre_all.shape[0]):
-        tmp[xr_pre_all.shape[1]*i:xr_pre_all.shape[1]*(i+1),:,:,:]=xr_pre_all[i]
-    print(xr_pre_all.shape,tmp.shape)
-    xr_pre_all=tmp
+    start_idx = 0
 
     for idx, (image, _) in tqdm(enumerate(data), total=len(data)):
         # if (idx==1): break
         x0 = transform_image(image).to(device)
-        random_watermark = torch.Tensor(np.random.choice([0, 1], (image.shape[0], args.watermark_length))).to(device)
+        # random_watermark = torch.Tensor(np.random.choice([0, 1], (image.shape[0], args.watermark_length))).to(device)
         random_watermark=torch.from_numpy(np.load('./watermark/watermark_coco.npy')).float().to(device).repeat(x0.shape[0], 1)
-        xr=model.encoder(x0,random_watermark)
+        if (args.defense in ["signature","stega"]): random_watermark = torch.Tensor(np.random.choice([0, 1], (args.watermark_length))).to(device).repeat(x0.shape[0], 1)
+        if (args.defense in ["DwtDctSvd","RivaGAN"]): random_watermark = torch.Tensor(np.array(bytearray_to_bits('test'.encode('utf-8')))).to(device).repeat(x0.shape[0], 1)
+        with torch.no_grad():
+            if (args.defense in ["DwtDctSvd","RivaGAN"]): xr=model.encoder(x0)
+            elif (args.defense=="tree"): xr=run_tree_ring(x0,pipe3)
+            elif (args.defense=="stega"): xr=model.encoder(random_watermark,x0)
+            # elif (args.defense=="mbrs"): xr=mbrs_model.run_MBRS()
+            else: xr=model.encoder(x0,random_watermark)
 
+        xr = transform_image(xr)
         results={}
         xr_pre=xr_pre_all[args.batch*idx:args.batch*(idx+1)]
+
+        # image=np.asarray(x0.detach().cpu().numpy())
+        # image_wm=np.asarray(xr.detach().cpu().numpy())
+        # psnr_clean=cal_psnr(image,image_wm)
+        # ssim_clean=cal_ssim(image,image_wm)
+        # lpips_score_clean=cal_lpips(image,image_wm)
+        # print(args.defense,psnr_clean,ssim_clean,lpips_score_clean)
+        # save_images(x0,xr,xr,"./result/"+str(dataset)+"/"+args.defense+".png",num=2)
+        # break
+
         # xr_pre=pre_optimize(model,x0,random_watermark,criterion,args)
-        # opt_xr.append(xr_pre)
+        # end_idx = start_idx + xr_pre.size(0)
+        # opt_xr[start_idx:end_idx] = xr_pre  # 将当前张量填充到result_tensor中
+        # start_idx = end_idx
         # continue
+
         cnt=0
         while (1):
             cnt+=1
-            # xr=direct_optimize(model,x0,random_watermark,criterion,args,xr_pre)
+            # if (args.defense=="advmark"): xr=direct_optimize(model,x0,random_watermark,criterion,args,xr_pre)
             if (args.defense=="advmark"): xr=xr_pre
-
             xr = transform_image(xr)
-            decoded_watermark = model.decoder(xr)
+            with torch.no_grad(): decoded_watermark = model.decoder(xr)
             rounded_decoded_watermark = decoded_watermark.detach().cpu().numpy().round().clip(0, 1)
+            # print(rounded_decoded_watermark,random_watermark.cpu().numpy())
             acc_clean = 1 - np.sum(np.abs(rounded_decoded_watermark - random_watermark.cpu().numpy())) / (xr.shape[0] * args.watermark_length)
 
             image=np.asarray(x0.detach().cpu().numpy())
@@ -572,7 +633,9 @@ def eval(model,data,args):
                 folder="./result/"+str(dataset)+"/"+args.defense+"/"+method
                 os.makedirs(folder, exist_ok=True)
                 xra=apply_attack(x0,xr,random_watermark, model.decoder, method,criterion, args)
-                decoded_watermark = model.decoder(xra)
+
+                with torch.no_grad(): decoded_watermark = model.decoder(xra)
+                
                 rounded_decoded_watermark = decoded_watermark.detach().cpu().numpy().round().clip(0, 1)
                 acc_adv = 1 - np.sum(np.abs(rounded_decoded_watermark - random_watermark.cpu().numpy())) / (xr.shape[0] * args.watermark_length)
                 # Detection for double-tailed/single-tailed detector.
@@ -593,9 +656,13 @@ def eval(model,data,args):
                 Batch_time[method].update(time.time() - start_time)
                 start_time = time.time()
                 results[method]=acc_adv
-            if (results['psnr_clean']>=29.5 and results['jpeg']>=0.8 and results['regen-diff']>=0.75): break
+            # if (results['psnr_clean']>=30.0 and results['jpeg']>=0.8 and results['regen-diff']>=0.8): break
             if (cnt>=1): break
-        opt_xr.append(results['xr'])
+
+        end_idx = start_idx + results['xr'].size(0)
+        opt_xr[start_idx:end_idx] = results['xr']  # 将当前张量填充到result_tensor中
+        start_idx = end_idx
+        
         Clean_acc.update(results['acc_clean'], image.shape[0])
         Clean_psnr.update(results['psnr_clean'], image.shape[0])
         Clean_ssim.update(results['ssim_clean'], image.shape[0])
@@ -609,11 +676,9 @@ def eval(model,data,args):
         print("Attack: ",method)
         print("Average Bit_acc=%.4f\t, Average Perturbation=%.4f\t Evasion rate=%.2f\t Time=%.2f" % (Bit_acc[method].avg, Perturbation[method].avg, Evasion_rate[method].avg, Batch_time[method].sum))
 
-    # x_stacked = torch.stack(opt_xr, dim=0).detach().cpu().numpy()
-    # # np.save("./result/opt_xr_"+str(args.lamda_i)+".npy", x_stacked)
-    # # np.save("./result/opt_xr_pre.npy", x_stacked)
-    # # np.save("./result/opt_xr_pre_db.npy", x_stacked)
-    # np.save("./result/opt_xr_db_"+str(args.lamda_i)+".npy", x_stacked)
+    # opt_xr=opt_xr.detach().cpu().numpy()
+    # np.save("./pre_opt/opt_xr_"+str(dataset)+"_"+str(args.lamda_i)+".npy", opt_xr)
+    # np.save("./pre_opt/opt_xr_"+str(dataset)+"_pre.npy", opt_xr)
 
 def main():
     parser = argparse.ArgumentParser(description='WEvade-W Arguments.')
@@ -624,13 +689,12 @@ def main():
     parser.add_argument('--decoder_blocks_num', default=7, type=int, help='Number of bits in a watermark.')
     parser.add_argument('--batch', default=10, type=int, help='batch size.')
     parser.add_argument('--tau', default=0.8, type=float, help='Detection threshold of the detector.')
-    parser.add_argument('--iteration', default=100, type=int, help='Max iteration in WEvdae-W.')
     parser.add_argument('--delta_finetune', default=80/255, type=float, help='Max perturbation for finetuning.')
 
     #Black Attack settings
     parser.add_argument('--batch-size', default=256, type=int, help='batch size for hopskipjump')
     parser.add_argument('--num-attack', default=100, type=int, help='number of images to attack')
-    parser.add_argument('--budget', default=2000, type=int, help='query budget')
+    parser.add_argument('--budget', default=500, type=int, help='query budget')
     parser.add_argument('--init-eval', default=5, type=int, help='hopskipjump parameters')
     parser.add_argument('--max-eval', default=1000, type=int, help='hopskipjump parameters')
     parser.add_argument('--iter-step', default=1, type=int, help='print interval')
@@ -639,22 +703,23 @@ def main():
 
     parser.add_argument('--mode', default="eval", type=str, help='eval model.')
     parser.add_argument('--defense', default="advmark", type=str, help='eval model.')
-    parser.add_argument('--iter_finetune', default=300, type=int, help='Max iteration in WEvdae-W.')
+    parser.add_argument('--iter_finetune', default=2000, type=int, help='Max iteration in WEvdae-W.')
     parser.add_argument('--epochs', default=1, type=int, help='Max iteration in WEvdae-W.')
-    parser.add_argument('--lr_encoder', default=1e-3, type=float, help='Max perturbation for finetuning.')
-    parser.add_argument('--lr_decoder', default=1e-3, type=float, help='Max perturbation for finetuning.')
-    parser.add_argument('--lr_image', default=1e-2, type=float, help='Max perturbation for finetuning.')
+    parser.add_argument('--lr_encoder', default=5e-4, type=float, help='Max perturbation for finetuning.')
+    parser.add_argument('--lr_decoder', default=5e-4, type=float, help='Max perturbation for finetuning.')
+    parser.add_argument('--lr_image', default=5e-4, type=float, help='Max perturbation for finetuning.')
     parser.add_argument('--lr_jpeg', default=0, type=int, help='Max perturbation for finetuning.')
-    parser.add_argument('--lamda_i', default=10, type=float, help='Max perturbation for finetuning.')
-    parser.add_argument('--attack_train', default="wevade", type=str, help='attack.')
-    parser.add_argument('--attack_train1', default="jpeg", type=str, help='attack.')
+    parser.add_argument('--lamda_i', default=5.0, type=float, help='Max perturbation for finetuning.')
+    parser.add_argument('--attack_train', default="jpeg", type=str, help='attack.')
+    parser.add_argument('--attack_train1', default="combined", type=str, help='attack.')
     parser.add_argument('--info', default="onlywevade", type=str, help='attack.')
 
     parser.add_argument('--epsilon', default=0.01, type=float, help='Epsilon used in WEvdae-W.')
-    parser.add_argument('--alpha', default=1, type=float, help='Learning rate used in WEvade-W.')
+    parser.add_argument('--iteration', default=100, type=int, help='Max iteration in WEvdae-W.')
+    parser.add_argument('--alpha', default=2, type=float, help='Learning rate used in WEvade-W.')
     parser.add_argument('--rb', default=2, type=float, help='Upper bound of perturbation.')
     parser.add_argument('--WEvade-type', default='WEvade-W-II', type=str, help='Using WEvade-W-I/II.')
-    parser.add_argument('--detector-type', default='double-tailed', type=str, help='Using double-tailed/single-tailed detctor.')
+    parser.add_argument('--detector-type', default='single-tailed', type=str, help='Using double-tailed/single-tailed detctor.')
     # In our algorithm, we use binary-search to obtain perturbation upper bound. But in the experiment, we find
     # binary-search actually has no significant effect on the perturbation results. And we reduce time cost if not
     # using binary-search.
@@ -666,6 +731,16 @@ def main():
     parser.add_argument('--a', default=1.5, type=float, help='Parameter a for Brightness/Contrast.')
 
     args = parser.parse_args()
+    if (args.defense=="signature"):
+        args.decoder_blocks_num=8
+        args.watermark_length=48
+        args.checkpoint="./converted/combined2.pth"
+    elif (args.defense=="advmark"):
+        args.checkpoint="./finetuned/epoch_100_0.0005_0.0005_10_0_wevade_onlywevade.pth"
+    elif (args.defense=="hidden"):
+        args.checkpoint="./ckpt/coco.pth"
+    elif (args.defense=="adv"):
+        args.checkpoint="./ckpt/coco_adv_train.pth"
 
     # Load model.
     model = Model(args.image_size, args.watermark_length,args.decoder_blocks_num, device)
@@ -675,10 +750,120 @@ def main():
     model.decoder.load_state_dict(checkpoint['dec-model'])
 
     # checkpoint = torch.load("./converted/clean.pth")
+    # model.encoder.load_state_dict(checkpoint['enc-model'])
+    # model.decoder.load_state_dict(checkpoint['dec-model'])
+    # checkpoint = torch.load("./finetuned/epoch_100_0.0005_0.0005_10_0_wevade_onlywevade.pth")
+    # # model.encoder.load_state_dict(checkpoint['enc-model'])
+    # model.decoder.load_state_dict(checkpoint['dec-model'])
+
+    if (args.defense in ["mbrs"]): 
+        args.batch=2
+        from MBRS.network.Network import Network
+        
+        # mbrs_model=Network(args.image_size,args.image_size, args.watermark_length,["JpegTest(50)"],args.batch,1e-3,False,"./MBRS/results/MBRS_Diffusion_128_m30",114)
+
+        mbrs_model = Network(args.image_size,args.image_size, args.watermark_length,["JpegTest(50)"], device, args.batch, 1e-3, True)
+        EC_path = "./MBRS/results/MBRS_Diffusion_128_m30/" + "models/EC_" + str(114) + ".pth"
+
+        # args.image_size=256
+        # args.watermark_length=256
+        # mbrs_model = Network(args.image_size,args.image_size, args.watermark_length,["JpegTest(50)"], device, args.batch, 1e-3, False)
+        # EC_path = "./MBRS/results/MBRS_256_m256/" + "models/EC_" + str(42) + ".pth"
+        mbrs_model.load_model_ed(EC_path)
+        # self.encoder= self.network.encoder_decoder.module.encoder
+        # self.decoder= self.network.encoder_decoder.module.decoder
+
+        model.encoder=mbrs_model.encoder_decoder.module.encoder
+        model.decoder=mbrs_model.encoder_decoder.module.decoder
+
+    if (args.defense in ["DwtDctSvd","RivaGAN"]): 
+        args.image_size=256
+        args.batch=2
+        args.watermark_length=32
+        model.encoder=defenders[args.defense].encoder
+        model.decoder=defenders[args.defense].decoder
+
+    if (args.defense=="stega"):
+        args.image_size=256
+        args.batch=2
+        from WatermarkDM.string2img.models import StegaStampEncoder, StegaStampDecoder
+        e_path="./checkpoints/watermarkDM/imagenet_encoder.pth"
+        d_path="./checkpoints/watermarkDM/imagenet_decoder.pth"
+        state_dict = torch.load(e_path)
+        FINGERPRINT_SIZE = state_dict["secret_dense.weight"].shape[-1] #64
+        args.watermark_length=FINGERPRINT_SIZE
+        HideNet = StegaStampEncoder(args.image_size,3,fingerprint_size=FINGERPRINT_SIZE,return_residual=False,)
+        RevealNet = StegaStampDecoder(args.image_size,3, fingerprint_size=FINGERPRINT_SIZE)
+        # kwargs = {"map_location": "cpu"} if args.cuda == -1 else {}
+        RevealNet.load_state_dict(torch.load(d_path))
+        HideNet.load_state_dict(torch.load(e_path))
+        HideNet = HideNet.to(device)
+        RevealNet = RevealNet.to(device)
+        model.encoder=HideNet
+        model.decoder=RevealNet
+
+    if (args.defense=="pimog"):
+        args.batch=5
+        pimog_model=Encoder_Decoder("Identity")
+        pimog_model=torch.nn.DataParallel(pimog_model)
+        tmp_model=torch.load("./pimog/models/ScreenShooting/Encoder_Decoder_Model_mask_99.pth")
+        pimog_model.load_state_dict(tmp_model)
+        model.encoder=pimog_model.module.Encoder.to(device)
+        model.decoder=pimog_model.module.Decoder.to(device)
+
+    if (args.defense=="cin"):
+        args.batch=5
+        from models.Network import Network
+        yml_path = './CIN/codes/options/opt.yml'
+        option_yml = parse_yml(yml_path)
+        # convert to NoneDict, which returns None for missing keys
+        opt = dict_to_nonedict(option_yml)
+        time_now_NewExperiment = time.strftime("%Y-%m-%d-%H:%M", time.localtime()) 
+        if opt['subfolder'] != None:
+            subfolder_name = opt['subfolder'] + '/-'
+        else:
+            subfolder_name = ''
+        #
+        name = str("CIN")
+        folder_str = opt['path']['logs_folder'] + name + '/' + subfolder_name + str(time_now_NewExperiment) + '-' + opt['train/test']
+        log_folder = folder_str + '/logs'
+        img_w_folder_tra = folder_str  + '/img/train'
+        img_w_folder_val = folder_str  + '/img/val'
+        img_w_folder_test = folder_str + '/img/test'
+        loss_w_folder = folder_str  + '/loss'
+        path_checkpoint = folder_str  + '/path_checkpoint'
+        opt_folder = folder_str  + '/opt'
+        opt['path']['folder_temp'] = folder_str  + '/temp'
+        #
+        path_in = {'log_folder':log_folder, 'img_w_folder_tra':img_w_folder_tra, \
+                        'img_w_folder_val':img_w_folder_val,'img_w_folder_test':img_w_folder_test,\
+                            'loss_w_folder':loss_w_folder, 'path_checkpoint':path_checkpoint, \
+                                'opt_folder':opt_folder, 'time_now_NewExperiment':time_now_NewExperiment}
+        # create logger
+        import utils_cin.utils as utils
+        utils.mkdir(log_folder)
+        network = Network(opt, device, path_in)
+        from model.cin import CIN
+        model.encoder=CIN(network.cinNet).encoder.to(device)
+        model.decoder=CIN(network.cinNet).decoder.to(device)
+        os.system("rm -rf ...")
+    
+
+    # checkpoint = torch.load("./converted/clean.pth")
     # print(checkpoint['enc-model'])
     # model.encoder.load_state_dict(checkpoint['enc-model'])
     # model.decoder.load_state_dict(checkpoint['dec-model'])
-
+    
+    # if (args.defense=="stega"): save_path_full = os.path.join(black8)
+    # else: save_path_full = os.path.join(black7)
+    save_path_full="../WAVES/adversarial/models/"+args.defense+".pth"
+    # if (args.defense=="stega"): save_path_full="../WAVES/adversarial/models/stegaStamp_classifier.pt"
+    global black_model
+    tmp_black=torch.load(save_path_full)['model']
+    black_model.load_state_dict(tmp_black)
+    black_model = black_model.to(device)
+    black_model.eval()
+    print("Model loaded!",save_path_full)
     # Load dataset.
     data = get_data_loaders(args.image_size, args.dataset_folder,args.batch)
     if (args.mode=="train"): train(model,data,args)

@@ -18,6 +18,15 @@ else:
 loss_fn = lpips.LPIPS(net='vgg')  # 或者 'alex' 也是可选的
 loss_fn = loss_fn.to(device)
 
+def bytearray_to_bits(x):
+    """Convert bytearray to a list of bits"""
+    result = []
+    for i in x:
+        bits = bin(i)[2:]
+        bits = '00000000'[len(bits):] + bits
+        result.extend([int(b) for b in bits])
+    return result
+
 def cal_fid(img1,img2):
     # 初始化预训练的Inception模型
     block_idx = InceptionV3.BLOCK_INDEX_BY_DIM[2048]
@@ -48,7 +57,11 @@ def cal_psnr(img1,img2):
 def cal_ssim(img1,img2):
     x=np.asarray(img1)
     x=np.tile(x, (2, 1, 1, 1))
+    x=np.tile(x, (2, 1, 1, 1))
+    x=np.tile(x, (2, 1, 1, 1))
     y=np.asarray(img2)
+    y=np.tile(y, (2, 1, 1, 1))
+    y=np.tile(y, (2, 1, 1, 1))
     y=np.tile(y, (2, 1, 1, 1))
     ssim=structural_similarity(x,y,channel_axis=1,data_range=2.0)
     return ssim
@@ -68,7 +81,7 @@ def jpeg_compress(x, quality_factor):
         img_aug[ii] = to_tensor(aug_functional.encoding_quality(pil_img, quality=quality_factor))
     return img_aug*2-1
 
-def save_images(original_images, watermarked_images,attack_images, folder):
+def save_images(original_images, watermarked_images,attack_images, folder,num=3):
     images = original_images[:original_images.shape[0], :, :, :].cpu()
     watermarked_images = watermarked_images[:watermarked_images.shape[0], :, :, :].cpu()
     attack_images = attack_images[:attack_images.shape[0], :, :, :].cpu()
@@ -78,7 +91,12 @@ def save_images(original_images, watermarked_images,attack_images, folder):
     watermarked_images = (watermarked_images + 1) / 2
     attack_images = (attack_images + 1) / 2
 
-    stacked_images = torch.cat([images, watermarked_images,attack_images], dim=0)
+    if (num==3): stacked_images = torch.cat([images, watermarked_images,attack_images], dim=0)
+    elif (num==2): 
+        abs_watermarked_images=np.abs(watermarked_images-images)*10
+        stacked_images = torch.cat([watermarked_images, abs_watermarked_images], dim=0)
+    else:
+        stacked_images = torch.cat([images], dim=0)
     torchvision.utils.save_image(stacked_images, folder,nrow=int(original_images.shape[0]))
 
 def save_image_from_tensor(tensor, file_path):

@@ -519,7 +519,7 @@ class StableDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin, Lo
         latents = latents * self.scheduler.init_noise_sigma
         return latents
 
-    @torch.no_grad()
+    # @torch.no_grad()
     @replace_example_docstring(EXAMPLE_DOC_STRING)
     def __call__(
         self,
@@ -700,6 +700,11 @@ class StableDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin, Lo
                     if callback is not None and i % callback_steps == 0:
                         callback(i, t, latents)
 
+        # 8. Post-processing
+        image = self.decode_latents(latents)
+        # print("in stable",image,image.shape,latents,latents.shape)
+        return image
+    
         if not output_type == "latent":
             image = self.vae.decode(latents / self.vae.config.scaling_factor, return_dict=False)[0]
             image, has_nsfw_concept = self.run_safety_checker(image, device, prompt_embeds.dtype)

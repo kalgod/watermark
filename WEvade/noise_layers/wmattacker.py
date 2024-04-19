@@ -219,6 +219,9 @@ class DiffWMAttacker(WMAttacker):
 
         if (eval==True):
             with torch.no_grad():
-                return execute()
+                torch.cuda.empty_cache()
+                tmp=execute()
+                
+                return tmp
         else:
             return execute()
