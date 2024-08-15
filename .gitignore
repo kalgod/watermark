@@ -4,4 +4,5 @@ DB
 WEvade/result/*
 WEvade/finetuned/*
 WEvade/pre_opt/*
+WEvade/pre_opt_mbrs/*
 WEvade/CIN/pth/cinNet&nsmNet.pth

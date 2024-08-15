@@ -265,10 +265,10 @@ def pre_optimize(model,x0,real_watermark,criterion,args):
 
         loss_a1,acc_adv1,psnr_adv1=cal_xra(x0,xr,"wevade");weight1=1;loss_a+=weight1*loss_a1;cnt+=weight1
 
-        # loss_a2,acc_adv2,psnr_adv2=cal_xra(x0,xr,args.attack_train1);weight2=1
-        # # if (acc_adv2<=args.tau): loss_a+=weight2*loss_a2;cnt+=weight2
+        loss_a2,acc_adv2,psnr_adv2=cal_xra(x0,xr,"jpeg");weight2=1
+        # if (acc_adv2<=args.tau): loss_a+=weight2*loss_a2;cnt+=weight2
 
-        # loss_a3,acc_adv3,psnr_adv3=cal_xra(x0,xr,"regen-diff");weight3=0.3
+        loss_a3,acc_adv3,psnr_adv3=cal_xra(x0,xr,"combined");weight3=0.3
         # if (acc_adv3<=args.tau): loss_a+=weight3*loss_a3;cnt+=weight3
 
         # loss_a4,acc_adv4,psnr_adv4=cal_xra(x0,xr,"gaussian");weight4=0.1
@@ -288,7 +288,7 @@ def pre_optimize(model,x0,real_watermark,criterion,args):
         loss=0.10*loss_a+0.1*loss_w+10*loss_i
 
         grads = torch.autograd.grad(loss, xr)
-        lr_tmp=1e-3
+        lr_tmp=2e-3
         xr = xr - lr_tmp * torch.sign(grads[0])
         delta=xr - x0
         delta=torch.clamp(delta,-2*args.delta_finetune,2*args.delta_finetune)
@@ -297,7 +297,7 @@ def pre_optimize(model,x0,real_watermark,criterion,args):
         xr = transform_image(xr)
         xr=xr.detach()
         print(i,loss.item(),acc_clean,psnr_clean,acc_adv1,acc_adv2,acc_adv3,acc_adv4,acc_adv5)
-        if (psnr_clean>=34.5): break
+        if (psnr_clean>=37): break
     model.encoder.eval()
     model.decoder.eval()
     return xr
@@ -321,6 +321,7 @@ def direct_optimize(model,x0,real_watermark,criterion,args,xr_pre):
     acc_adv3=0
     acc_adv4=0
     acc_adv5=0
+    acc_adv6=0
 
     def cal_xra(x0,xr,method):
         xra=apply_attack(x0,xr.clone(),real_watermark, model.decoder,method,criterion, args,eval=False)
@@ -345,7 +346,7 @@ def direct_optimize(model,x0,real_watermark,criterion,args,xr_pre):
         if (acc_adv1<=0.85): loss_a+=weight1*loss_a1;cnt+=weight1
 
         loss_a2,acc_adv2,psnr_adv2=cal_xra(x0,xr,args.attack_train1);weight2=1
-        # if (acc_adv2<=0.72): loss_a+=weight2*loss_a2;cnt+=weight2
+        if (acc_adv2<=0.82): loss_a+=weight2*loss_a2;cnt+=weight2
 
         loss_a3,acc_adv3,psnr_adv3=cal_xra(x0,xr,"regen-diff");weight3=0.1
         if (acc_adv3<=0.85): loss_a+=weight3*loss_a3;cnt+=weight3
@@ -356,13 +357,15 @@ def direct_optimize(model,x0,real_watermark,criterion,args,xr_pre):
         loss_a5,acc_adv5,psnr_adv5=cal_xra(x0,xr,"gaussianblur");weight5=0.1
         if (acc_adv5<=0.99): loss_a+=weight5*loss_a5;cnt+=weight5
 
+        # loss_a6,acc_adv6,psnr_adv6=cal_xra(x0,xr,"wevade");weight6=0.1
+
         # loss_a5,acc_adv5,psnr_adv5=cal_xra(x0,xr,"regen-diff");weight=0.1;loss_a+=weight*loss_a5;cnt+=weight
 
         loss_a=loss_a/cnt
         loss_w = criterion(decoded_watermark_clean, real_watermark)
         loss_i1=0.1*torch.mean(loss_fn(x0,xr))+0.9*criterion(x0,xr)
         loss_i2=criterion(xr_pre,xr)
-        loss_i=(1*loss_i1+1*loss_i2)/2
+        loss_i=(1*loss_i1+10*loss_i2)/11
 
         loss=loss_a+0.1*loss_w+args.lamda_i*loss_i
 
@@ -374,9 +377,9 @@ def direct_optimize(model,x0,real_watermark,criterion,args,xr_pre):
         xr=x0+delta
         xr = transform_image(xr)
         xr=xr.detach()
-        if (i%10==0): print(i,loss.item(),acc_clean,psnr_clean,acc_adv1,acc_adv2,acc_adv3,acc_adv4,acc_adv5)
-        if (acc_adv1>0.8 and acc_adv3>0.8 and acc_adv4>0.9 and acc_adv5>0.9): break
-        if (psnr_clean<=30.0): break
+        if (i%10==0): print(i,loss.item(),acc_clean,psnr_clean,acc_adv1,acc_adv2,acc_adv3,acc_adv4,acc_adv5,acc_adv6)
+        # if (acc_adv1>0.8 and acc_adv3>0.8 and acc_adv4>0.9 and acc_adv5>0.9): break
+        if (psnr_clean<=35.0): break
     model.encoder.eval()
     model.decoder.eval()
     return xr
@@ -407,8 +410,8 @@ def update_model(model,x0,real_watermark,criterion,args,select):
         loss=criterion(decoded_watermark_adv,real_watermark)
         return loss,acc_adv,psnr_adv
 
-    for i in range(args.iter_finetune):
-        if (i==args.iter_finetune-1 and acc_adv1<=args.tau): 
+    for i in range(args.iter_E):
+        if (i==args.iter_E-1 and acc_adv1<=args.tau): 
             model.encoder.train()
             model.decoder.train()
         else:
@@ -449,13 +452,13 @@ def update_model(model,x0,real_watermark,criterion,args,select):
         loss_w = criterion(decoded_watermark_clean, real_watermark)
         # loss_i=criterion(x0,xr)
         loss_i=0.5*torch.mean(loss_fn(x0,xr))+0.5*criterion(x0,xr)
-        loss=loss_a+1*loss_w+args.lamda_i*loss_i
+        loss=10*loss_a+1*loss_w+args.lamda_i*loss_i
         
         optimizer_en.zero_grad()
         optimizer_de.zero_grad()
         loss.backward()
 
-        if (i==args.iter_finetune-1 and acc_adv1<=args.tau): optimizer_de.step()
+        if (i==args.iter_E-1 and acc_adv1<=args.tau): optimizer_de.step()
         else: optimizer_en.step()
 
         # optimizer_en.step()
@@ -477,7 +480,7 @@ def train(model,data,args):
     criterion = nn.MSELoss()
 
     method_list = ['wevade','jpeg', 'gaussian', 'gaussianblur', 'brightness']
-    method_list = ['wevade']
+    method_list = ['jpeg']
     for method in method_list:
         Bit_acc = AverageMeter()
         Clean_psnr=AverageMeter()
@@ -567,9 +570,12 @@ def eval(model,data,args):
     opt_xr=torch.zeros((100,3,args.image_size,args.image_size))
     dataset=args.dataset_folder.split("/")[-1]
 
-    xr_pre_all=np.load("./pre_opt/opt_xr_"+str(dataset)+"_"+str(args.lamda_i)+".npy")
+    xr_pre_all=np.load("./pre_opt_mbrs/opt_xr_pre.npy")
     # xr_pre_all=np.load("./pre_opt/opt_xr_"+str(dataset)+"_pre_128.npy")
     xr_pre_all=torch.from_numpy(xr_pre_all).float().to(device)
+
+    xr_opt_all=np.load("./pre_opt_mbrs/opt_xr.npy")
+    xr_opt_all=torch.from_numpy(xr_opt_all).float().to(device)
     start_idx = 0
 
     for idx, (image, _) in tqdm(enumerate(data), total=len(data)):
@@ -589,14 +595,18 @@ def eval(model,data,args):
         xr = transform_image(xr)
         results={}
         xr_pre=xr_pre_all[args.batch*idx:args.batch*(idx+1)]
+        xr_opt=xr_opt_all[args.batch*idx:args.batch*(idx+1)]
 
-        # image=np.asarray(x0.detach().cpu().numpy())
-        # image_wm=np.asarray(xr.detach().cpu().numpy())
-        # psnr_clean=cal_psnr(image,image_wm)
-        # ssim_clean=cal_ssim(image,image_wm)
-        # lpips_score_clean=cal_lpips(image,image_wm)
+        image=np.asarray(x0.detach().cpu().numpy())
+        image_wm=np.asarray(xr.detach().cpu().numpy())
+        psnr_clean=cal_psnr(image,image_wm)
+        ssim_clean=cal_ssim(image,image_wm)
+        lpips_score_clean=cal_lpips(image,image_wm)
         # print(args.defense,psnr_clean,ssim_clean,lpips_score_clean)
-        # save_images(x0,xr,xr,"./result/"+str(dataset)+"/"+args.defense+".png",num=2)
+        if (idx!=61): continue
+        if (args.defense=="advmark"): xr=xr_opt
+        save_images(x0,xr,xr,"./result/"+str(dataset)+"/"+args.defense+".png",num=2)
+        # save_images(x0,xr,xr,"./result/"+str(dataset)+"/ori_256.png",num=1)
         # break
 
         # xr_pre=pre_optimize(model,x0,random_watermark,criterion,args)
@@ -609,7 +619,8 @@ def eval(model,data,args):
         while (1):
             cnt+=1
             # if (args.defense=="advmark"): xr=direct_optimize(model,x0,random_watermark,criterion,args,xr_pre)
-            if (args.defense=="advmark"): xr=xr_pre
+            if (args.defense=="advmark"): xr=xr_opt
+            # if (args.defense=="mbrs"): xr=direct_optimize(model,x0,random_watermark,criterion,args,xr)
             xr = transform_image(xr)
             with torch.no_grad(): decoded_watermark = model.decoder(xr)
             rounded_decoded_watermark = decoded_watermark.detach().cpu().numpy().round().clip(0, 1)
@@ -645,7 +656,7 @@ def eval(model,data,args):
                     evasion = (acc_adv <= args.tau)
 
                 image_attack=np.asarray(xra.detach().cpu().numpy())
-                save_images(x0,xr,xra,folder+"/"+str(idx)+".png")
+                save_images(x0,xra,xra,folder+"/"+str(idx)+".png",num=2)
                 psnr_adv=cal_psnr(image,image_attack)
                 ssim_adv=cal_ssim(image,image_attack)
                 lpips_score_adv=cal_lpips(image,image_attack)
@@ -676,9 +687,9 @@ def eval(model,data,args):
         print("Attack: ",method)
         print("Average Bit_acc=%.4f\t, Average Perturbation=%.4f\t Evasion rate=%.2f\t Time=%.2f" % (Bit_acc[method].avg, Perturbation[method].avg, Evasion_rate[method].avg, Batch_time[method].sum))
 
-    # opt_xr=opt_xr.detach().cpu().numpy()
-    # np.save("./pre_opt/opt_xr_"+str(dataset)+"_"+str(args.lamda_i)+".npy", opt_xr)
-    # np.save("./pre_opt/opt_xr_"+str(dataset)+"_pre.npy", opt_xr)
+    opt_xr=opt_xr.detach().cpu().numpy()
+    # np.save("./pre_opt_mbrs/opt_xr_pre.npy", opt_xr)
+    # np.save("./pre_opt_mbrs/opt_xr.npy", opt_xr)
 
 def main():
     parser = argparse.ArgumentParser(description='WEvade-W Arguments.')
@@ -704,6 +715,7 @@ def main():
     parser.add_argument('--mode', default="eval", type=str, help='eval model.')
     parser.add_argument('--defense', default="advmark", type=str, help='eval model.')
     parser.add_argument('--iter_finetune', default=2000, type=int, help='Max iteration in WEvdae-W.')
+    parser.add_argument('--iter_E', default=10, type=int, help='Max iteration in WEvdae-W.')
     parser.add_argument('--epochs', default=1, type=int, help='Max iteration in WEvdae-W.')
     parser.add_argument('--lr_encoder', default=5e-4, type=float, help='Max perturbation for finetuning.')
     parser.add_argument('--lr_decoder', default=5e-4, type=float, help='Max perturbation for finetuning.')
@@ -756,8 +768,8 @@ def main():
     # # model.encoder.load_state_dict(checkpoint['enc-model'])
     # model.decoder.load_state_dict(checkpoint['dec-model'])
 
-    if (args.defense in ["mbrs"]): 
-        args.batch=2
+    if (args.defense in ["mbrs","advmark"]): 
+        # args.batch=5
         from MBRS.network.Network import Network
         
         # mbrs_model=Network(args.image_size,args.image_size, args.watermark_length,["JpegTest(50)"],args.batch,1e-3,False,"./MBRS/results/MBRS_Diffusion_128_m30",114)
@@ -778,14 +790,14 @@ def main():
 
     if (args.defense in ["DwtDctSvd","RivaGAN"]): 
         args.image_size=256
-        args.batch=2
+        # args.batch=2
         args.watermark_length=32
         model.encoder=defenders[args.defense].encoder
         model.decoder=defenders[args.defense].decoder
 
     if (args.defense=="stega"):
         args.image_size=256
-        args.batch=2
+        # args.batch=2
         from WatermarkDM.string2img.models import StegaStampEncoder, StegaStampDecoder
         e_path="./checkpoints/watermarkDM/imagenet_encoder.pth"
         d_path="./checkpoints/watermarkDM/imagenet_decoder.pth"
@@ -803,7 +815,7 @@ def main():
         model.decoder=RevealNet
 
     if (args.defense=="pimog"):
-        args.batch=5
+        # args.batch=5
         pimog_model=Encoder_Decoder("Identity")
         pimog_model=torch.nn.DataParallel(pimog_model)
         tmp_model=torch.load("./pimog/models/ScreenShooting/Encoder_Decoder_Model_mask_99.pth")
@@ -812,7 +824,7 @@ def main():
         model.decoder=pimog_model.module.Decoder.to(device)
 
     if (args.defense=="cin"):
-        args.batch=5
+        # args.batch=5
         from models.Network import Network
         yml_path = './CIN/codes/options/opt.yml'
         option_yml = parse_yml(yml_path)

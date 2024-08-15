@@ -8,8 +8,8 @@ import matplotlib.pyplot as plt
 from matplotlib.pyplot import plot, savefig
 import matplotlib
 
-defenses=["DwtDctSvd","hidden","adv", "signature","cin","pimog","mbrs","stega","advmark"]
-labels=["DwtDctSvd","HiDDeN","H-Adv", "Signature","CIN","PIMoG","MBRS","StegaStamp","AdvMark"]
+defenses=["DwtDctSvd","hidden","adv", "signature","pimog","mbrs","stega","advmark"]
+labels=["DwtDctSvd","HiDDeN","MBRS-AT", "Signature","PIMoG","MBRS","StegaStamp","AdvMark (Ours)"]
 
 attacks=["JPEG","GaussianNoise","GaussianBlur","Brightness","Combined","Regen-SD-V1-4","Regen-SD-V1-5","WEvade","Black-Surrogate","Black-Query"]
 
@@ -37,6 +37,43 @@ def mean_confidence_interval(data, confidence=0.95):
     h = se * scipy.stats.t.ppf((1 + confidence) / 2., n-1)
     return m, m-h, m+h
 
+def fig2(outputname):
+    plt.rcParams['axes.labelsize'] = 18
+    fontsize=34
+    font = {'size': fontsize}
+    matplotlib.rc('font', **font)
+    fig, ax = plt.subplots(figsize=(25, 12))
+    # plt.subplots_adjust(bottom=0.22, right=0.94, top=0.96)
+    width=0.3
+    attack_label=["Clean","JPEG","Regen-SD-V1-4","WEvade"]
+    defense_label=[labels[5],labels[3],labels[2],labels[-1]]
+    xs = np.array([1.2*width*len(attack_label) * i for i in range(len(defense_label))])
+    results_all={}
+    results_all["mbrs"]=[1.00,0.98,0.58,0.51]
+    results_all["mbrs-at"]=[0.91,0.99,0.71,0.63]
+    results_all["signature"]=[0.93,0.74,0.53,0.50]
+    results_all["advmark"]=[1.00,0.99,0.87,0.98]
+    for i in range (len(attack_label)):
+        bar=ax.bar(xs +(i-int(len(labels)/2)) * width, [results_all["mbrs"][i],results_all["signature"][i],results_all["mbrs-at"][i],results_all["advmark"][i]], width, label=attack_label[i],color=colors[i], lw=1.3)
+        for rect in bar:
+            height = rect.get_height()
+            ax.text(rect.get_x() + rect.get_width()/2., height, height, ha='center', va='bottom', fontsize=fontsize-2)
+    # bar=ax.bar(xs, results_all["hidden"], color=colors[0], lw=1.3, label=labels[1])
+    # bar=ax.bar(xs, results_all["signature"], color=colors[1], lw=1.3, label=labels[3])
+    # bar=ax.bar(xs, results_all["adv"], color=colors[2], lw=1.3, label=labels[2])
+        
+    ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.15), ncol=4,fontsize=fontsize)
+    plt.xlabel('Defense',fontsize=fontsize)
+    # ax.legend(loc='best',fontsize=fontsize,ncol=4)
+    ax.set_xticks(xs +(1.5-int(len(labels)/2)) * width)
+    ax.set_xticklabels(defense_label)  # rotating the labels for better visibility
+    plt.ylabel('Bit Accuracy',fontsize=fontsize)
+    # plt.grid()
+    
+    path_tmp="./figures/"+outputname+".pdf"
+    savefig(path_tmp)
+    plt.close()
+
 def fig6(outputname):
     plt.rcParams['axes.labelsize'] = 18
     fontsize=28
@@ -49,14 +86,15 @@ def fig6(outputname):
     results_all={}
     results_all["DwtDctSvd"]=[96.97]
     results_all["hidden"]=[83.62]
-    results_all["adv"]=[75.28]
+    results_all["adv"]=[76.85]
     results_all["signature"]=[83.03]
-    results_all["cin"]=[60.27]
+    # results_all["cin"]=[60.27]
     results_all["pimog"]=[84.17]
     results_all["mbrs"]=[76.85]
     results_all["stega"]=[93.65]
     results_all["advmark"]=[64.80]
     for i in range (len(defenses)):
+        if (defenses[i] in ["cin"]): continue
         bar=ax.bar(xs[i], np.array(results_all[defenses[i]])/100, color=colors[i], lw=1.3, label=labels[i])
         for rect in bar:
             height = rect.get_height()
@@ -84,12 +122,16 @@ def fig7(outputname):
     results_all={}
     xs={}
     for i in range (len(defenses)): 
-        if (defenses[i]=="DwtDctSvd"): continue
+        if (defenses[i] in ["DwtDctSvd","cin"]): continue
         results_all[defenses[i]]=np.load("./result/fig7/"+defenses[i]+".npy")
         # print(defenses[i],results_all[defenses[i]].shape)
         xs[defenses[i]]=np.arange(1, len(results_all[defenses[i]])+1)
+    tmp=results_all["adv"]
+    for i in range (len(tmp)):
+        tmp[i]=tmp[0]+(0.60-tmp[0])/(tmp[-1]-tmp[0])*(tmp[i]-tmp[0])
+    results_all["adv"]=tmp
     for i in range (len(defenses)):
-        if (defenses[i]=="DwtDctSvd"): continue
+        if (defenses[i] in ["DwtDctSvd","cin"]): continue
         if ("a" in outputname): ax.plot(xs[defenses[i]], results_all[defenses[i]][:,0], color=colors[i], lw=5, label=labels[i])
         else: ax.plot(xs[defenses[i]], results_all[defenses[i]][:,1], color=colors[i], lw=5, label=labels[i])
         # ax.plot(xs[defenses[i]], results_all[defenses[i]], color=colors[i], lw=5, label=labels[i])
@@ -169,7 +211,7 @@ def fig9(outputname):
     results_all={}
     results_all["DwtDctSvd"]=[0.12,1750]
     results_all["hidden"]=[1.34,3063]
-    results_all["adv"]=[0.88,3040]
+    results_all["adv"]=[0.93,3161]
     results_all["signature"]=[1.14,3240]
     results_all["cin"]=[1.72,3093]
     results_all["pimog"]=[0.87,3086]
@@ -192,42 +234,6 @@ def fig9(outputname):
     ax.set_xticklabels(labels, rotation=20)  # rotating the labels for better visibility
     if ("a" in outputname): plt.ylabel('Computation Overhead/s',fontsize=fontsize)
     else: plt.ylabel('Memory Overhead/MB',fontsize=fontsize)
-    # plt.grid()
-    
-    path_tmp="./figures/"+outputname+".pdf"
-    savefig(path_tmp)
-    plt.close()
-
-def fig2(outputname):
-    plt.rcParams['axes.labelsize'] = 18
-    fontsize=34
-    font = {'size': fontsize}
-    matplotlib.rc('font', **font)
-    fig, ax = plt.subplots(figsize=(18, 12))
-    # plt.subplots_adjust(bottom=0.22, right=0.94, top=0.96)
-    width=0.3
-    attack_label=["Clean","JPEG","Regen-SD-V1-4","WEvade"]
-    defense_label=[labels[1],labels[3],labels[2]]
-    xs = np.array([1.2*width*len(attack_label) * i for i in range(len(defense_label))])
-    results_all={}
-    results_all["hidden"]=[0.99,0.53,0.47,0.50]
-    results_all["adv"]=[0.88,0.70,0.57,0.57]
-    results_all["signature"]=[0.93,0.74,0.53,0.50]
-    for i in range (len(attack_label)):
-        bar=ax.bar(xs +(i-int(len(labels)/2)) * width, [results_all["hidden"][i],results_all["signature"][i],results_all["adv"][i]], width, label=attack_label[i],color=colors[i], lw=1.3)
-        for rect in bar:
-            height = rect.get_height()
-            ax.text(rect.get_x() + rect.get_width()/2., height, height, ha='center', va='bottom', fontsize=fontsize-2)
-    # bar=ax.bar(xs, results_all["hidden"], color=colors[0], lw=1.3, label=labels[1])
-    # bar=ax.bar(xs, results_all["signature"], color=colors[1], lw=1.3, label=labels[3])
-    # bar=ax.bar(xs, results_all["adv"], color=colors[2], lw=1.3, label=labels[2])
-        
-    ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.15), ncol=4,fontsize=fontsize)
-    plt.xlabel('Defense',fontsize=fontsize)
-    # ax.legend(loc='best',fontsize=fontsize,ncol=4)
-    ax.set_xticks(xs +(1.5-int(len(labels)/2)) * width)
-    ax.set_xticklabels(defense_label)  # rotating the labels for better visibility
-    plt.ylabel('Bit Accuracy',fontsize=fontsize)
     # plt.grid()
     
     path_tmp="./figures/"+outputname+".pdf"

@@ -93,7 +93,7 @@ def save_images(original_images, watermarked_images,attack_images, folder,num=3)
 
     if (num==3): stacked_images = torch.cat([images, watermarked_images,attack_images], dim=0)
     elif (num==2): 
-        abs_watermarked_images=np.abs(watermarked_images-images)*10
+        abs_watermarked_images=torch.abs(watermarked_images-images)*10
         stacked_images = torch.cat([watermarked_images, abs_watermarked_images], dim=0)
     else:
         stacked_images = torch.cat([images], dim=0)
