@@ -7,37 +7,13 @@ Finished loading model
 Diffuse attack initialized with noise step 0 and use prompt 0
 Diffuse attack initialized with noise step 0 and use prompt 0
 0.001
-Model loaded! ../WAVES/adversarial/models/advmark.pth
-cur idx:  61
-For watermark, PSNR: 37.27191400425534 SSIM: 0.9818856 LPIPS: 0.0029902922 ACC: 1.0
-For attacks:  surrogate  PSNR: 24.76384804369955 SSIM: 0.8062671 LPIPS: 0.21872896 ACC: 1.0
-For attacks:  wevade  PSNR: 37.86113689162494 SSIM: 0.9823577 LPIPS: 0.0067942613 ACC: 0.4666666666666667
-For attacks:  regen-diff  PSNR: 16.291570370641466 SSIM: 0.47215524 LPIPS: 0.21628296 ACC: 0.7666666666666666
-For attacks:  regen-diff-1  PSNR: 16.293028788762097 SSIM: 0.46948183 LPIPS: 0.21851677 ACC: 0.8333333333333334
-For attacks:  combined  PSNR: 17.427970903419588 SSIM: 0.53244406 LPIPS: 0.20989084 ACC: 0.9
-For attacks:  jpeg  PSNR: 25.589513407834175 SSIM: 0.89924264 LPIPS: 0.11780562 ACC: 1.0
-For attacks:  gaussian  PSNR: 25.83960302816598 SSIM: 0.8602231 LPIPS: 0.117665574 ACC: 1.0
-For attacks:  gaussianblur  PSNR: 27.45727673667787 SSIM: 0.95113367 LPIPS: 0.037891824 ACC: 1.0
-For attacks:  brightness  PSNR: 17.837331613025274 SSIM: 0.59488326 LPIPS: 0.06963078 ACC: 1.0
-For attacks:  black  PSNR: 12.474282637987775 SSIM: 0.2945765 LPIPS: 0.59662336 ACC: 0.7333333333333334
-Average Clean_acc=1.0000	, Average Clean_psnr=37.2719	, Average Clean_ssim=0.9819	, Average Clean_lpips=0.0030	
-Attack:  surrogate
-Average Bit_acc=1.0000	, Average Perturbation=24.7638	 Evasion rate=0.00	 Time=4.93
-Attack:  wevade
-Average Bit_acc=0.4667	, Average Perturbation=37.8611	 Evasion rate=1.00	 Time=0.94
-Attack:  regen-diff
-Average Bit_acc=0.7667	, Average Perturbation=16.2916	 Evasion rate=1.00	 Time=0.78
-Attack:  regen-diff-1
-Average Bit_acc=0.8333	, Average Perturbation=16.2930	 Evasion rate=0.00	 Time=0.17
-Attack:  combined
-Average Bit_acc=0.9000	, Average Perturbation=17.4280	 Evasion rate=0.00	 Time=0.15
-Attack:  jpeg
-Average Bit_acc=1.0000	, Average Perturbation=25.5895	 Evasion rate=0.00	 Time=0.07
-Attack:  gaussian
-Average Bit_acc=1.0000	, Average Perturbation=25.8396	 Evasion rate=0.00	 Time=0.04
-Attack:  gaussianblur
-Average Bit_acc=1.0000	, Average Perturbation=27.4573	 Evasion rate=0.00	 Time=0.05
-Attack:  brightness
-Average Bit_acc=1.0000	, Average Perturbation=17.8373	 Evasion rate=0.00	 Time=0.05
-Attack:  black
-Average Bit_acc=0.7333	, Average Perturbation=12.4743	 Evasion rate=1.00	 Time=3.80
+Model loaded! ../WAVES/adversarial/models/mbrs.pth
+finetuning encoder: 
+0 0.16222813725471497 1.0 31.689952788624822 1.0 0.5333333333333333 0.5666666666666667 1.0 1.0 0
+10 0.2579769194126129 1.0 31.531180588277145 1.0 0.30000000000000004 0.6333333333333333 1.0 1.0 0
+20 0.21105267107486725 1.0 31.327648500008713 1.0 0.4 0.7 1.0 1.0 0
+30 0.16661350429058075 1.0 31.100417352222426 1.0 0.5 0.8 1.0 1.0 0
+40 0.1499321311712265 1.0 30.884966458740337 1.0 0.6333333333333333 0.7666666666666666 1.0 1.0 0
+50 0.14435674250125885 1.0 30.692937787193657 1.0 0.6666666666666667 0.7666666666666666 1.0 1.0 0
+60 0.12290532886981964 1.0 30.49110782946635 1.0 0.9 0.8 1.0 1.0 0
+70 0.19699978828430176 1.0 30.352744481851182 1.0 1.0 0.8333333333333334 1.0 1.0 0

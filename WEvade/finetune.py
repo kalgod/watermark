@@ -342,11 +342,11 @@ def direct_optimize(model,x0,real_watermark,criterion,args,xr_pre):
         loss_a=0
         cnt=1e-9
 
-        loss_a1,acc_adv1,psnr_adv1=cal_xra(x0,xr,args.attack_train);weight1=1
-        if (acc_adv1<=0.85): loss_a+=weight1*loss_a1;cnt+=weight1
+        loss_a1,acc_adv1,psnr_adv1=cal_xra(x0,xr,"jpeg");weight1=1
+        if (acc_adv1<=0.99): loss_a+=weight1*loss_a1;cnt+=weight1
 
-        loss_a2,acc_adv2,psnr_adv2=cal_xra(x0,xr,args.attack_train1);weight2=1
-        if (acc_adv2<=0.82): loss_a+=weight2*loss_a2;cnt+=weight2
+        loss_a2,acc_adv2,psnr_adv2=cal_xra(x0,xr,"wevade");weight2=1
+        if (acc_adv2<=0.99): loss_a+=weight2*loss_a2;cnt+=weight2
 
         loss_a3,acc_adv3,psnr_adv3=cal_xra(x0,xr,"regen-diff");weight3=0.1
         if (acc_adv3<=0.85): loss_a+=weight3*loss_a3;cnt+=weight3
@@ -379,7 +379,7 @@ def direct_optimize(model,x0,real_watermark,criterion,args,xr_pre):
         xr=xr.detach()
         if (i%10==0): print(i,loss.item(),acc_clean,psnr_clean,acc_adv1,acc_adv2,acc_adv3,acc_adv4,acc_adv5,acc_adv6)
         # if (acc_adv1>0.8 and acc_adv3>0.8 and acc_adv4>0.9 and acc_adv5>0.9): break
-        if (psnr_clean<=35.0): break
+        # if (psnr_clean<=35.0): break
     model.encoder.eval()
     model.decoder.eval()
     return xr
@@ -410,17 +410,19 @@ def update_model(model,x0,real_watermark,criterion,args,select):
         loss=criterion(decoded_watermark_adv,real_watermark)
         return loss,acc_adv,psnr_adv
 
-    for i in range(args.iter_E):
-        if (i==args.iter_E-1 and acc_adv1<=args.tau): 
-            model.encoder.train()
-            model.decoder.train()
-        else:
-            model.encoder.train()
-            model.decoder.train()
+    for i in range(10):
+        # if (i==args.iter_E-1 and acc_adv1<=args.tau): 
+        #     model.encoder.train()
+        #     model.decoder.train()
+        # else:
+        #     model.encoder.train()
+        #     model.decoder.train()
 
         # model.encoder.train()
         # model.decoder.eval()
-        xr=model.encoder(x0,real_watermark)
+        
+        if (args.defense=="stega"): xr=model.encoder(real_watermark,x0)
+        else: xr=model.encoder(x0,real_watermark)
         xr = transform_image(xr)
 
         decoded_watermark_clean = model.decoder(xr)
@@ -431,13 +433,13 @@ def update_model(model,x0,real_watermark,criterion,args,select):
         loss_a=0
         cnt=1e-9
 
-        loss_a1,acc_adv1,psnr_adv1=cal_xra(x0,xr,args.attack_train);weight1=1;loss_a+=weight1*loss_a1;cnt+=weight1
+        loss_a1,acc_adv1,psnr_adv1=cal_xra(x0,xr,"wevade");weight1=1;loss_a+=weight1*loss_a1;cnt+=weight1
 
-        # loss_a2,acc_adv2,psnr_adv2=cal_xra(x0,xr,args.attack_train1);weight2=1
-        # if (acc_adv2<=args.tau): loss_a+=weight2*loss_a2;cnt+=weight2
+        loss_a2,acc_adv2,psnr_adv2=cal_xra(x0,xr,"regen-diff");weight2=1
+        if (acc_adv2<=args.tau): loss_a+=weight2*loss_a2;cnt+=weight2
 
-        # loss_a3,acc_adv3,psnr_adv3=cal_xra(x0,xr,"regen-diff");weight3=0.3
-        # if (acc_adv3<=args.tau): loss_a+=weight3*loss_a3;cnt+=weight3
+        loss_a3,acc_adv3,psnr_adv3=cal_xra(x0,xr,"jpeg");weight3=1
+        if (acc_adv3<=args.tau): loss_a+=weight3*loss_a3;cnt+=weight3
 
         # loss_a4,acc_adv4,psnr_adv4=cal_xra(x0,xr,"gaussian");weight4=0.1
         # if (acc_adv4<=0.9): loss_a+=weight4*loss_a4;cnt+=weight4
@@ -452,23 +454,24 @@ def update_model(model,x0,real_watermark,criterion,args,select):
         loss_w = criterion(decoded_watermark_clean, real_watermark)
         # loss_i=criterion(x0,xr)
         loss_i=0.5*torch.mean(loss_fn(x0,xr))+0.5*criterion(x0,xr)
-        loss=10*loss_a+1*loss_w+args.lamda_i*loss_i
+        loss=1*loss_a+1*loss_w+args.lamda_i*loss_i
         
         optimizer_en.zero_grad()
         optimizer_de.zero_grad()
         loss.backward()
 
-        if (i==args.iter_E-1 and acc_adv1<=args.tau): optimizer_de.step()
-        else: optimizer_en.step()
+        # if (i==args.iter_E-1 and acc_adv1<=args.tau): optimizer_de.step()
+        # else: optimizer_en.step()
 
-        # optimizer_en.step()
-        # optimizer_de.step()
+        optimizer_en.step()
+        optimizer_de.step()
         print(i,loss.item(),acc_clean,psnr_clean,acc_adv1,acc_adv2,acc_adv3,acc_adv4,acc_adv5)
         # if (acc_adv1>args.tau): break
 
     model.encoder.eval()
     model.decoder.eval()
-    xr=model.encoder(x0,real_watermark)
+    if (args.defense=="stega"): xr=model.encoder(real_watermark,x0)
+    else: xr=model.encoder(x0,real_watermark)
     xr = transform_image(xr)
     return xr
 
@@ -491,12 +494,15 @@ def train(model,data,args):
         
         for i in range (args.epochs):
             for idx, (image, _) in tqdm(enumerate(data), total=len(data)):
+                if (idx!=61): continue
                 x0 = transform_image(image).to(device)
                 random_watermark = torch.Tensor(np.random.choice([0, 1], (image.shape[0], args.watermark_length))).to(device)
 
-                xr=update_model(model,x0,random_watermark,criterion,args,"encoder")
-                # xr=direct_optimize(model,x0,random_watermark,criterion,args)
+                # xr=update_model(model,x0,random_watermark,criterion,args,"encoder")
+                xr=model.encoder(x0,random_watermark)
+                xr=direct_optimize(model,x0,random_watermark,criterion,args,xr)
                 xr = transform_image(xr)
+                save_images(x0,xr,xr,f"./result/fig4/{args.defense}.png",num=2)
                 xra=apply_attack(x0,xr,random_watermark, model.decoder, method,criterion, args)
 
                 decoded_watermark = model.decoder(xr)
@@ -603,7 +609,7 @@ def eval(model,data,args):
         ssim_clean=cal_ssim(image,image_wm)
         lpips_score_clean=cal_lpips(image,image_wm)
         # print(args.defense,psnr_clean,ssim_clean,lpips_score_clean)
-        if (idx!=61): continue
+        # if (idx!=61): continue
         if (args.defense=="advmark"): xr=xr_opt
         save_images(x0,xr,xr,"./result/"+str(dataset)+"/"+args.defense+".png",num=2)
         # save_images(x0,xr,xr,"./result/"+str(dataset)+"/ori_256.png",num=1)
